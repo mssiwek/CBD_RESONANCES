@@ -1,12 +1,12 @@
 import misc
-import ebdot_maps as em
+import orbital_evolution_maps as oem
 
-fp_root = "/n/holylfs05/LABS/hernquist_lab/msiwek/arepo/cbd_ebqb_study/res=5.000e-10/alpha=0.100/dim=2/"
+fp_root = "/n/holylfs05/LABS/hernquist_lab/msiwek/arepo/cbd_ebqb_study_rs_videos//res=5.000e-10/alpha=0.100/dim=2/"
 figpath = "./figures/"
 
 param_dict = \
     {\
-    'e': [0.1, 0.5, 0.8],
+    'e': [0.8],
     'q': [1.0],
     'aspect_ratio': [0.10],
     'phi': [0.0],
@@ -20,7 +20,11 @@ titles = []
 for eb in param_dict['e']:
     titles.append(r'$e_{\rm b} = $' + '%.2f' %eb)
 
-em.plot(all_fps, figpath, titles, box=20, BoxSize=300, \
-    dim='2D', SemiMajorAxis=1, fname='ebdot', contour=False, ratio = False,\
-    vmin = -1, vmax=1, i_initial=600, i_final=800)
+param = 'abdot'
+for param in ['ebdot']:
+    fname = '%s_slow_motion' %param
+
+    oem.plot(all_fps, figpath, titles, param, box=20, BoxSize=300, \
+        dim='2D', SemiMajorAxis=1, fname=fname, contour=False, ratio = False,\
+        vmin = -1, vmax=1, i_initial=1000, i_final=1500)
 
