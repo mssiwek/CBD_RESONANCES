@@ -1,4 +1,6 @@
 numpy
 matplotlib
 gadget
-math
+scipy
+seaborn
+h5py

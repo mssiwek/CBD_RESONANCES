@@ -1,1 +1,5 @@
 figures/
+submit_postproc.slurm
+envs.sh
+*.pyc
+__pycache__/*
