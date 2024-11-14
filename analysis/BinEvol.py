@@ -206,6 +206,7 @@ class SimInit:
         
 
     def evol_from_snap(self, sn):
+        print("Note: ebdot and abdot maps do not include accretion contributions.")
         """ MUST GET LOCATIONS AND MASSES 
             OF GAS DISTRIBUTION WE WANT TO USE 
             TO CALCULATE BINARY EVOLUTION """
@@ -264,6 +265,8 @@ class SimInit:
         """ GETTING ENERGY RATE OF CHANGE """
         """ ----------------------------- """
         """ ----------------------------- """
+
+        self.mbdot = 0
         
         return(self)
 
