@@ -8,13 +8,11 @@
 """
 
 import numpy as np  
-import torques_eb_lb as tq
 import misc
 import sys
 import time
 import gadget
 import h5py as h5
-import scipy
 import matplotlib.pyplot as plt
 import matplotlib.colors as colors
 from mpl_toolkits.axes_grid1 import make_axes_locatable
@@ -62,7 +60,7 @@ class Snap:
             grid = np.dstack([grid, Z_interp_reshape])
         return(grid)
         
-    def plot_interp(self, **kwargs):
+    def plot_interp(self, vlims=[-1.e-8,1.e-8], cbar_symlog=True, **kwargs):
         if 'ax' in kwargs:
             ax = kwargs['ax']
         else:
@@ -70,12 +68,14 @@ class Snap:
             fig.tight_layout(rect=[0, 0.03, 1, 0.95])
             ax = fig.add_subplot(1,1,1)
         
-        v_range = 1.e-8
-        cbar_norm_log = colors.SymLogNorm(linthresh=1.e-10, linscale=0.03, \
-                                    vmin=-v_range, vmax=v_range)
+        if cbar_symlog:
+            v_range = 1.e-8
+            cbar_norm = colors.SymLogNorm(linthresh=1.e-10, linscale=0.03, \
+                                        vmin=-v_range, vmax=v_range)
+        else:
+            cbar_norm = colors.LogNorm(vmin=vlims[0], vmax=vlims[1])
         
-        #norm=cbar_norm_log, \
-        im = ax.pcolormesh(self.X_interp, self.Y_interp, self.Z_interp, norm=cbar_norm_log, \
+        im = ax.pcolormesh(self.X_interp, self.Y_interp, self.Z_interp, norm=cbar_norm, \
                             cmap='RdBu_r')
 
         divider = make_axes_locatable(ax)
