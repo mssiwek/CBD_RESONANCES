@@ -76,9 +76,10 @@ class BinEvol:
     
     MB[0]: MASS OF PRIMARY, MB[1]: MASS OF SECONDARY"""
 class SimInit:
-    def __init__(self, ext, acc=False, f_acc=False, **kwargs):
+    def __init__(self, ext, acc=False, f_acc=False, fg_cav=True, **kwargs):
         self.acc = acc
         self.f_acc = f_acc
+        self.fg_cav = fg_cav
         self.ext = ext
         start_time = time.time()
         all_param = misc.load_param_txt(self.ext + '/../')
@@ -127,15 +128,25 @@ class SimInit:
         """ --------------------------------------- """
         """ --------------------------------------- """
         """ GETTING ANGULAR MOMENTUM RATE OF CHANGE """
-        self.dlb1 = tqfl['dlb_sum_grav_1_2']
-        self.dlb2 = tqfl['dlb_sum_grav_2_2']
+        if self.fg_cav:
+            self.dlb1 = tqfl['dlb_sum_grav_1_2']
+            self.dlb2 = tqfl['dlb_sum_grav_2_2']
+        else:
+            """ IF fg_cav == False, ONLY GAS CELLS 
+            WITH r>a_b ARE INCLUDED IN CALCULATION:
+                f_ext = f_grav[r>a_b] """
+            self.dlb1 = tqfl['dlb_sum_grav_a_1_2']
+            self.dlb2 = tqfl['dlb_sum_grav_a_2_2']
         if self.f_acc:
-            """ f_acc REFERS TO THE ACCRETION OF LINEAR MOMENTUM, I.E. 
-                IF f_acc == True, WE ADD THIS TO THE 
-                EXTERNAL FORCE APPLIED TO BINARY:
-                f_ext = f_grav + f_acc """
-            self.dlb1 += tqfl['dlb_sum_acc_1_2']
-            self.dlb2 += tqfl['dlb_sum_acc_2_2']
+            if not self.fg_cav:
+                exit("Cannot include accretion torques if we choose to exclude r<a_b gas cells!")
+            else:
+                """ f_acc REFERS TO THE ACCRETION OF LINEAR MOMENTUM, I.E. 
+                    IF f_acc == True, WE ADD THIS TO THE 
+                    EXTERNAL FORCE APPLIED TO BINARY:
+                    f_ext = f_grav + f_acc """
+                self.dlb1 += tqfl['dlb_sum_acc_1_2']
+                self.dlb2 += tqfl['dlb_sum_acc_2_2']
         """ GETTING ANGULAR MOMENTUM RATE OF CHANGE """
         """ --------------------------------------- """
         """ --------------------------------------- """
@@ -145,21 +156,25 @@ class SimInit:
         """ ----------------------------- """
         """ ----------------------------- """
         """ GETTING ENERGY RATE OF CHANGE """
-        if self.f_acc:
-            """ f_acc REFERS TO THE ACCRETION OF LINEAR MOMENTUM, I.E. 
-                IF f_acc == True, WE ADD THIS TO THE 
-                EXTERNAL FORCE APPLIED TO BINARY:
-                f_ext = f_grav + f_acc """
-            self.depsb1 = tqfl['depsb_sum_grav_acc_no_mdot_1']
-            self.depsb2 = tqfl['depsb_sum_grav_acc_no_mdot_2']
-        else:
+        if not self.fg_cav:
             """ f_ext = f_grav ONLY """
             self.depsb1 = tqfl['depsb_sum_grav_no_mdot_1']
             self.depsb2 = tqfl['depsb_sum_grav_no_mdot_2']
+        else:
+            if self.f_acc:
+                """ f_acc REFERS TO THE ACCRETION OF LINEAR MOMENTUM, I.E. 
+                    IF f_acc == True, WE ADD THIS TO THE 
+                    EXTERNAL FORCE APPLIED TO BINARY:
+                    f_ext = f_grav + f_acc """
+                self.depsb1 = tqfl['depsb_sum_grav_acc_no_mdot_1']
+                self.depsb2 = tqfl['depsb_sum_grav_acc_no_mdot_2']
+            else:
+                """ f_ext = f_grav ONLY """
+                self.depsb1 = tqfl['depsb_sum_grav_no_mdot_1']
+                self.depsb2 = tqfl['depsb_sum_grav_no_mdot_2']
         """ GETTING ENERGY RATE OF CHANGE """
         """ ----------------------------- """
         """ ----------------------------- """
-
 
 
         if self.all_param['MassRatio'] == 1:
@@ -189,18 +204,17 @@ class SimInit:
         """ CALCULATE TOTAL RATE OF CHANGE OF 
             ANGULAR MOMENTUM AND ENERGY """
         
-
-        
-        if self.acc:
-            """ NOW WE ARE ALSO ADDING EFFECT OF ACCRETION TO THE 
-                RATE OF CHANGE OF EPSILON (BINARY SPECIFIC ENERGY) """
-            self.depsb += - tqfl['dm']/tqfl['r_b_mag']
-            self.mbdot = tqfl['dm']
+        if not self.fg_cav:
+            if self.acc:
+                """ NOW WE ARE ALSO ADDING EFFECT OF ACCRETION TO THE 
+                    RATE OF CHANGE OF EPSILON (BINARY SPECIFIC ENERGY) """
+                self.depsb += - tqfl['dm']/tqfl['r_b_mag']
+                self.mbdot = tqfl['dm']
+            else:
+                self.mbdot = 0
         else:
             self.mbdot = 0
-        
         print("remainder of evol_from_txt took %s seconds ---" % (time.time() - start_time))
-
 
         return(self)
         
