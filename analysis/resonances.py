@@ -2,17 +2,29 @@
 
 import numpy as np
 
-def r_LR(m, l, ab=1, outer=True):
-    """ LINDBLAD RESONANCES """
-    if outer:
-        eps = 1
+def r_ILR(l,m, ab=1):
+    """ INNER LINDBLAD RESONANCES """
+    eps = -1
+    if l == 0 or m <= 1:
+        return(np.nan)
     else:
-        eps = -1
-    return(((m + eps) / (l))**(2/3.) * ab)
+        return(((m + eps) / (l))**(2/3.) * ab)
 
-def r_CR(m, l, ab=1):
+def r_OLR(l,m, ab=1):
+    """ OUTER LINDBLAD RESONANCES """
+    eps = +1
+    if l == 0 or m == -1:
+        return(np.nan)
+    else:
+        return(((m + eps) / (l))**(2/3.) * ab)
+
+
+def r_CR(l,m, ab=1):
     """ CO-ROTATION RESONANCES """
-    return((m/l)**(2./3.)*ab)
+    if l == 0 or m == 0:
+        return(np.nan)
+    else:
+        return((m/l)**(2./3.)*ab)
 
 def omega(r, mb=1, G=1):
     return(np.sqrt(G*mb/(r**3)))
