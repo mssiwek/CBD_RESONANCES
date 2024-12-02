@@ -16,7 +16,6 @@ except:
    import pickle as pkl
 import matplotlib as mpl
 import matplotlib.colors as colors
-import calc_ebdot_abdot_sn as cean
 
 #plt.rc('text', usetex=True)
 #plt.rc('text.latex', preamble=r'\usepackage{amsmath}')
