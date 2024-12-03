@@ -16,11 +16,12 @@ linewidth = 2
 
 Pb = 2.*np.pi
 
-def plot(all_fps, figpath, titles, param, \
+def plot(all_fps, figpath, param, \
          vlims, \
          cbar_symlog=True, \
+         make_video = True, \
          box=10, ncells = 500, BoxSize=300, \
-         dim='2D', SemiMajorAxis=1, fname='ebdot', \
+         fname='ebdot', \
          **kwargs):
 
     i_initial, i_final = misc.snap_inds(all_fps, kwargs)
@@ -43,24 +44,41 @@ def plot(all_fps, figpath, titles, param, \
 
             if param == 'ebdot':
                 z = binevol.ebdot()
+                cbar_label = r'$\dot{e}_{\rm b}$'
             if param == 'abdot':
                 z = binevol.abdot()
+                cbar_label = r'$\dot{a}_{\rm b}$'
             if param == 'rho':
                 z = snap.Snap['PartType0']['Density']
+                cbar_label = r'$\Sigma$'
 
             #interpolate grid
             snap.interp(x_interp, y_interp, z)
             #now stack the interpolated grid onto the last one
             grid = snap.stack_grid(grid=grid)
         
-        snap.plot_interp(figpath = figpath, vlims=vlims, \
-                         cbar_symlog=cbar_symlog, \
-                         fname = fname + '_interp_%.3d' %i)
-        title = r'$%.2f < t < %.2f$' %(t_initial/Pb, t_final/Pb)
-        fname += '_stacked_grid' + '_%.2f<t<%.2f' %(t_initial/Pb, t_final/Pb)
+            if make_video:
+                title = r'$t = %.2f\,P_{\rm b}$' %(snap.Snap['/Header'].attrs['Time']/Pb)
+                plot_utils.plot_mesh(snap.X_interp, snap.Y_interp, snap.Z_interp, \
+                             cbar_symlog=cbar_symlog, \
+                             figpath = figpath, \
+                             fname = fname + '_interp_%.3d' %i,\
+                             title=title, \
+                             vlims=vlims, \
+                             cbar_label=cbar_label)
+        
+        title = r'$%.2f\,P_{\rm b} < t < %.2f\,P_{\rm b}$' %(t_initial/Pb, t_final/Pb)
+        fname_stacked = fname + '_stacked_grid' + '_%.2f<t<%.2f' %(t_initial/Pb, t_final/Pb)
         plot_utils.plot_mesh(X_interp, Y_interp, np.mean(grid, axis=-1), \
-                             figpath = figpath, fname = fname,\
-                             title=title, vlims=vlims)
+                             cbar_symlog=cbar_symlog, \
+                             figpath = figpath, \
+                             fname = fname_stacked,\
+                             title=title, \
+                             vlims=vlims, \
+                             cbar_label=cbar_label)
+        
+        if make_video:
+            misc.make_video(figpath, fname + '_interp')
 
             
 if __name__ == "__main__":
@@ -83,7 +101,7 @@ if __name__ == "__main__":
     for eb in param_dict['e']:
         titles.append(r'$e_{\rm b} = $' + '%.2f' %eb)
 
-    param = 'rho'
+    param = 'ebdot'
     if param=='rho':
         vlims=[1.e-7, 1.e-4]
         cbar_symlog=False
@@ -91,9 +109,9 @@ if __name__ == "__main__":
         vlims=[-1.e-8,1.e-8]
         cbar_symlog=True
     fname = param + '_eb=%.2f' %param_dict['e'][0] + '_qb=%.2f' %param_dict['q'][0]
-    plot(all_fps, figpath + '/stacked_grids/', titles, param, vlims, \
-         cbar_symlog = cbar_symlog, box=10, ncells=500, BoxSize=300, \
-         SemiMajorAxis=1, fname=fname, i_initial=300, i_final=601)
+    plot(all_fps, figpath + '/stacked_grids/', param, vlims, \
+         cbar_symlog = cbar_symlog, make_video=True, box=10, ncells=500, BoxSize=300, \
+         SemiMajorAxis=1, fname=fname, i_initial=300, i_final=310)
 
 
             

@@ -26,7 +26,7 @@ def plot_sinks(ax, sn=None, size=0.1, BoxSize=300):
     
     return(ax)
 
-def plot_mesh(X, Y, Z, **kwargs):
+def plot_mesh(X, Y, Z, cbar_symlog=True, **kwargs):
     if 'ax' in kwargs:
         ax = kwargs['ax']
     else:
@@ -34,31 +34,42 @@ def plot_mesh(X, Y, Z, **kwargs):
         fig.tight_layout(rect=[0, 0.03, 1, 0.95])
         ax = fig.add_subplot(1,1,1)
     
-    v_range = 1.e-8
     if 'vlims' in kwargs:
         vlims = kwargs['vlims']
     else:
-        vlims = [-1.e-8, 1.e-8]
-    linthresh=1.e-10
-    if 'linthresh' in kwargs:
-        linthresh = kwargs['linthresh']
+        v_range = 1.e-8
+        vlims = [-v_range, v_range]
     
-    cbar_norm_log = colors.SymLogNorm(linthresh=linthresh, linscale=0.03, \
-                                vmin=vlims[0], vmax=vlims[1])
+    if 'cbar_norm' in kwargs:
+        cbar_norm = kwargs['cbar_norm']
+    else:
+        if cbar_symlog:
+            if 'linthresh' in kwargs:
+                linthresh = kwargs['linthresh']
+            else:
+                linthresh=1.e-10
+            cbar_norm = colors.SymLogNorm(linthresh=linthresh, linscale=0.03, \
+                                        vmin=vlims[0], vmax=vlims[1])
+        else:
+            cbar_norm = colors.LogNorm(vmin=vlims[0], vmax=vlims[1])
+
     
-    im = ax.pcolormesh(X, Y, Z, norm=cbar_norm_log, \
+    im = ax.pcolormesh(X, Y, Z, norm=cbar_norm, \
                         cmap='RdBu_r')
 
     divider = make_axes_locatable(ax)
     cax = divider.append_axes("right", size="5%", pad=0.05)
     cbar = plt.colorbar(im, cax=cax)
+    cbar.ax.set_yticks([vlims[0], 0.1*vlims[0], 0, 0.1*vlims[1], vlims[1]])
+    cbar.ax.tick_params(labelsize=fs)
     try:
-        cbar.set_label(kwargs['cbar_label'], rotation=90, fontsize=fs)
+        cbar.set_label(kwargs['cbar_label'], fontsize=fs) #rotation=90, 
     except:
         print("Warning: Did not supply cbar_label in kwargs.")
 
     ''' Add a marker for the sink particles '''
-    plot_sinks(ax)
+    if 'sn' in kwargs:
+        plot_sinks(ax, sn=kwargs['sn'])
 
     ax.set_xlabel(r'$x/a_{\rm b}$', fontsize=fs)
     ax.set_ylabel(r'$y/a_{\rm b}$', fontsize=fs)
