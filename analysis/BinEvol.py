@@ -13,11 +13,11 @@
 """
 
 import numpy as np  
-import torques_eb_lb as tq
 import misc
 import sys
 import time
 import h5py as h5
+import pandas as pd
 
 class BinEvol:
     def __init__(self, SimInit, from_txt=True, from_snap=False, sn=None):
@@ -48,19 +48,26 @@ class BinEvol:
         if self.eb > 0:
             ebdot = ((1 - self.eb**2)/(2.*self.eb)) \
                     * (2. * self.SimInit.mbdot/self.mb \
-                    - self.SimInit.depsb/self.SimInit.epsb \
-                    - (2. * self.SimInit.dlb/self.SimInit.lb))
+                    - self.SimInit.epsbdot/self.SimInit.epsb \
+                    - (2. * self.SimInit.lbdot/self.SimInit.lb))
         else:
             ebdot = (1 - self.eb**2) \
                     * (2. * self.SimInit.mbdot/self.mb \
-                    - self.SimInit.depsb/self.SimInit.epsb \
-                    - (2. * self.SimInit.dlb/self.SimInit.lb))
+                    - self.SimInit.epsbdot/self.SimInit.epsb \
+                    - (2. * self.SimInit.lbdot/self.SimInit.lb))
         return(ebdot)
 
     def abdot(self):
         abdot = self.SimInit.mbdot/self.mb \
-                - self.SimInit.depsb/self.SimInit.epsb
+                - self.SimInit.epsbdot/self.SimInit.epsb
         return(abdot) 
+    
+    def mbdot(self):
+        return(self.SimInit.mbdot)
+    
+    def mbdot_norm(self):
+        return(self.SimInit.mbdot_norm)
+
 
 
 """ INITIALIZE THE SIMULATION. RETURNS THE LOCATIONS AND MASSES 
@@ -94,6 +101,10 @@ class SimInit:
                           * self.all_param['SemiMajorAxis']\
                           * (1. - self.all_param['Eccentricity']**2))
         
+        if self.all_param['InclinationAngle'] > 0:
+            print("Inclination Angle = %.2f. Assuming the binary is retrograde, \n and therefore lb is multiplied by -1." %(self.all_param['InclinationAngle']))
+            self.lb *= (-1)
+
     
     def evol_from_txt(self):
         """ THIS MEANS WE ARE SUPPLYING A FILEPATH VIA ext,
@@ -103,8 +114,8 @@ class SimInit:
         """ ------------------------------------- """
         """ ------------------------------------- """
         start_time = time.time()
-        tqfl = tq.read_torques_eb_lb_txt(self.ext, orbit_averaged=True, n_orbit_average = 1, \
-                                            raw=False, dot_eb = True, old_sims=True)
+        tqfl = self.read_torques_txt(orbit_averaged=True, n_orbit_average = 1, \
+                                     raw=False, dot_eb = True, old_sims=True)
         print("loading torques_eb_lb.txt took %s seconds ---" % (time.time() - start_time))
 
         """ ------------------------------------- """
@@ -125,9 +136,9 @@ class SimInit:
 
 
 
-        """ --------------------------------------- """
-        """ --------------------------------------- """
-        """ GETTING ANGULAR MOMENTUM RATE OF CHANGE """
+        """ ------------------------------------------------------ """
+        """ ------------------------------------------------------ """
+        """ GETTING ANGULAR MOMENTUM INCREMENTAL CHANGE (delta lb) """
         if self.fg_cav:
             self.dlb1 = tqfl['dlb_sum_grav_1_2']
             self.dlb2 = tqfl['dlb_sum_grav_2_2']
@@ -147,20 +158,22 @@ class SimInit:
                     f_ext = f_grav + f_acc """
                 self.dlb1 += tqfl['dlb_sum_acc_1_2']
                 self.dlb2 += tqfl['dlb_sum_acc_2_2']
-        """ GETTING ANGULAR MOMENTUM RATE OF CHANGE """
-        """ --------------------------------------- """
-        """ --------------------------------------- """
+        """ GETTING ANGULAR MOMENTUM INCREMENTAL CHANGE (delta lb) """
+        """ ------------------------------------------------------ """
+        """ ------------------------------------------------------ """
 
 
 
-        """ ----------------------------- """
-        """ ----------------------------- """
-        """ GETTING ENERGY RATE OF CHANGE """
+        """ --------------------------------- """
+        """ --------------------------------- """
+        """ GETTING ENERGY INCREMENTAL CHANGE """
         if not self.fg_cav:
+            """ EXCLUDING cavity """
             """ f_ext = f_grav ONLY """
-            self.depsb1 = tqfl['depsb_sum_grav_no_mdot_1']
-            self.depsb2 = tqfl['depsb_sum_grav_no_mdot_2']
+            self.depsb1 = tqfl['depsb_sum_grav_a_no_mdot_1']
+            self.depsb2 = tqfl['depsb_sum_grav_a_no_mdot_2']
         else:
+            """ INCLUDING cavity """
             if self.f_acc:
                 """ f_acc REFERS TO THE ACCRETION OF LINEAR MOMENTUM, I.E. 
                     IF f_acc == True, WE ADD THIS TO THE 
@@ -172,9 +185,9 @@ class SimInit:
                 """ f_ext = f_grav ONLY """
                 self.depsb1 = tqfl['depsb_sum_grav_no_mdot_1']
                 self.depsb2 = tqfl['depsb_sum_grav_no_mdot_2']
-        """ GETTING ENERGY RATE OF CHANGE """
-        """ ----------------------------- """
-        """ ----------------------------- """
+        """ GETTING ENERGY INCREMENTAL CHANGE """
+        """ --------------------------------- """
+        """ --------------------------------- """
 
 
         if self.all_param['MassRatio'] == 1:
@@ -193,34 +206,49 @@ class SimInit:
             s1 = +1
             s2 = -1
         
-        """ CALCULATE TOTAL RATE OF CHANGE OF 
-            ANGULAR MOMENTUM AND ENERGY """
+        """ CALCULATE TOTAL INCREMENTAL CHANGE 
+            IN ANGULAR MOMENTUM AND ENERGY """
         """ --------------------------------- """
         """ --------------------------------- """
         self.dlb = s1 * self.dlb1 + s2 * self.dlb2
         self.depsb = s1 * self.depsb1 + s2 * self.depsb2
         """ --------------------------------- """
         """ --------------------------------- """
-        """ CALCULATE TOTAL RATE OF CHANGE OF 
-            ANGULAR MOMENTUM AND ENERGY """
+        """ CALCULATE TOTAL INCREMENTAL CHANGE 
+            IN ANGULAR MOMENTUM AND ENERGY """
         
         if not self.fg_cav:
             if self.acc:
                 """ NOW WE ARE ALSO ADDING EFFECT OF ACCRETION TO THE 
                     RATE OF CHANGE OF EPSILON (BINARY SPECIFIC ENERGY) """
                 self.depsb += - tqfl['dm']/tqfl['r_b_mag']
-                self.mbdot = tqfl['dm']
+                self.dmb = tqfl['dm']
             else:
+                self.dmb = 0
                 self.mbdot = 0
         else:
+            self.dmb = 0
             self.mbdot = 0
+
+        self.epsbdot = np.zeros(np.shape(tqfl['t']))
+        self.epsbdot[1:] = self.depsb[1:]/np.diff(tqfl['t'])
+
+        self.lbdot = np.zeros(np.shape(tqfl['t']))
+        self.lbdot[1:] = self.dlb[1:]/np.diff(tqfl['t'])
+
+        self.mbdot_norm = np.zeros(np.shape(tqfl['t']))
+        self.mbdot_norm[1:] = tqfl['dm'][1:]/np.diff(tqfl['t'])
+        self.mbdot_norm[0] = self.mbdot_norm[1]
+        
+        """ dmb to normalize! """
+        self.dmb_norm = tqfl['dm']
         print("remainder of evol_from_txt took %s seconds ---" % (time.time() - start_time))
 
         return(self)
         
 
     def evol_from_snap(self, sn):
-        print("Note: ebdot and abdot maps do not include accretion contributions.")
+        """Note: ebdot and abdot maps do not include accretion contributions."""
         """ MUST GET LOCATIONS AND MASSES 
             OF GAS DISTRIBUTION WE WANT TO USE 
             TO CALCULATE BINARY EVOLUTION """
@@ -265,7 +293,7 @@ class SimInit:
         dxb = sn['PartType5']['Coordinates'][0][0] - sn['PartType5']['Coordinates'][1][0]
         dyb = sn['PartType5']['Coordinates'][0][1] - sn['PartType5']['Coordinates'][1][1]
         rb = [dxb, dyb]
-        self.dlb = rb[0]*self.fgrav[1] - rb[1]*self.fgrav[0]
+        self.lbdot = rb[0]*self.fgrav[1] - rb[1]*self.fgrav[0]
         """ GETTING ANGULAR MOMENTUM RATE OF CHANGE """
         """ --------------------------------------- """
         """ --------------------------------------- """
@@ -275,18 +303,314 @@ class SimInit:
         """ ----------------------------- """
         """ GETTING ENERGY RATE OF CHANGE """
         vb = sn['PartType5']['Velocities'][0] - sn['PartType5']['Velocities'][1]
-        self.depsb = vb[0]*self.fgrav[0]+vb[1]*self.fgrav[1]
+        self.epsbdot = vb[0]*self.fgrav[0]+vb[1]*self.fgrav[1]
         """ GETTING ENERGY RATE OF CHANGE """
         """ ----------------------------- """
         """ ----------------------------- """
 
+        self.dmb = 0
         self.mbdot = 0
         
         return(self)
+    
+
+    def read_torques_txt(self, orbit_averaged=True, n_orbit_average = 1, \
+                         raw=False, dot_eb = True, old_sims=True, **kwargs):
+
+        fp = self.ext
+
+        if 'fname' in kwargs:
+            fname = kwargs['fname']
+        else:
+            fname = 'torques_eb_lb'
+        all_param = misc.load_param_txt(fp)
+
+        if (all_param['Eccentricity'] == 0.200 or all_param['Eccentricity'] == 0.400) and old_sims:
+            columns = ['t', \
+                    'id_1', 'id_2', \
+                    'mass_1', 'mass_2', \
+                    'sink_1_pos_0', 'sink_1_pos_1', 'sink_1_pos_2', \
+                    'sink_2_pos_0', 'sink_2_pos_1', 'sink_2_pos_2', \
+                    'sink_1_vel_0', 'sink_1_vel_1', 'sink_1_vel_2', \
+                    'sink_2_vel_0', 'sink_2_vel_1', 'sink_2_vel_2', \
+                    'dm_1', 'dm_2', \
+                    'dp_1_0', 'dp_1_1', 'dp_1_2', \
+                    'dp_2_0', 'dp_2_1', 'dp_2_2', \
+                    'dspin_1_0', 'dspin_1_1', 'dspin_1_2',
+                    'dspin_2_0', 'dspin_2_1', 'dspin_2_2',
+                    'f_inst_grav_1_0', 'f_inst_grav_1_1', 'f_inst_grav_1_2', \
+                    'f_inst_grav_2_0', 'f_inst_grav_2_1', 'f_inst_grav_2_2', \
+                    'f_inst_grav_a_1_0', 'f_inst_grav_a_1_1', 'f_inst_grav_a_1_2', \
+                    'f_inst_grav_a_2_0', 'f_inst_grav_a_2_1', 'f_inst_grav_a_2_2', \
+                    'f_inst_grav_acc_1_0', 'f_inst_grav_acc_1_1', 'f_inst_grav_acc_1_2', \
+                    'f_inst_grav_acc_2_0', 'f_inst_grav_acc_2_1', 'f_inst_grav_acc_2_2', \
+                    'dlb_sum_grav_1_0', 'dlb_sum_grav_1_1', 'dlb_sum_grav_1_2', \
+                    'dlb_sum_grav_2_0', 'dlb_sum_grav_2_1', 'dlb_sum_grav_2_2', \
+                    'dlb_sum_grav_a_1_0', 'dlb_sum_grav_a_1_1', 'dlb_sum_grav_a_1_2', \
+                    'dlb_sum_grav_a_2_0', 'dlb_sum_grav_a_2_1', 'dlb_sum_grav_a_2_2', \
+                    'dlb_sum_acc_1_0', 'dlb_sum_acc_1_1', 'dlb_sum_acc_1_2', \
+                    'dlb_sum_acc_2_0', 'dlb_sum_acc_2_1', 'dlb_sum_acc_2_2', \
+                    'depsb_sum_grav_1', 'depsb_sum_grav_2', \
+                    'depsb_sum_grav_no_mdot_1', 'depsb_sum_grav_no_mdot_2', \
+                    'depsb_sum_grav_acc_no_mdot_1', 'depsb_sum_grav_acc_no_mdot_2', \
+                    'depsb_sum_grav_acc_1', 'depsb_sum_grav_acc_2', \
+                    'depsb_sum_grav_a_1', 'depsb_sum_grav_a_2', \
+                    'depsb_sum_acc_1', 'depsb_sum_acc_2']
+
+            columns_bh_1 = ['t', \
+                            'id_1',\
+                            'mass_1',\
+                            'sink_1_pos_0', 'sink_1_pos_1', 'sink_1_pos_2', \
+                            'sink_1_vel_0', 'sink_1_vel_1', 'sink_1_vel_2', \
+                            'dm_1',\
+                            'dp_1_0', 'dp_1_1', 'dp_1_2', \
+                            'dspin_1_0', 'dspin_1_1', 'dspin_1_2',
+                            'f_inst_grav_1_0', 'f_inst_grav_1_1', 'f_inst_grav_1_2', \
+                            'f_inst_grav_a_1_0', 'f_inst_grav_a_1_1', 'f_inst_grav_a_1_2', \
+                            'f_inst_grav_acc_1_0', 'f_inst_grav_acc_1_1', 'f_inst_grav_acc_1_2', \
+                            'dlb_sum_grav_1_0', 'dlb_sum_grav_1_1', 'dlb_sum_grav_1_2', \
+                            'dlb_sum_grav_a_1_0', 'dlb_sum_grav_a_1_1', 'dlb_sum_grav_a_1_2', \
+                            'dlb_sum_acc_1_0', 'dlb_sum_acc_1_1', 'dlb_sum_acc_1_2', \
+                            'depsb_sum_grav_1', \
+                            'depsb_sum_grav_no_mdot_1', \
+                            'depsb_sum_grav_acc_no_mdot_1',\
+                            'depsb_sum_grav_acc_1', \
+                            'depsb_sum_grav_a_1',\
+                            'depsb_sum_acc_1']
+            columns_bh_2 = ['t', \
+                            'id_2',\
+                            'mass_2',\
+                            'sink_2_pos_0', 'sink_2_pos_1', 'sink_2_pos_2', \
+                            'sink_2_vel_0', 'sink_2_vel_1', 'sink_2_vel_2', \
+                            'dm_2',\
+                            'dp_2_0', 'dp_2_1', 'dp_2_2', \
+                            'dspin_2_0', 'dspin_2_1', 'dspin_2_2',
+                            'f_inst_grav_2_0', 'f_inst_grav_2_1', 'f_inst_grav_2_2', \
+                            'f_inst_grav_a_2_0', 'f_inst_grav_a_2_1', 'f_inst_grav_a_2_2', \
+                            'f_inst_grav_acc_2_0', 'f_inst_grav_acc_2_1', 'f_inst_grav_acc_2_2', \
+                            'dlb_sum_grav_2_0', 'dlb_sum_grav_2_1', 'dlb_sum_grav_2_2', \
+                            'dlb_sum_grav_a_2_0', 'dlb_sum_grav_a_2_1', 'dlb_sum_grav_a_2_2', \
+                            'dlb_sum_acc_2_0', 'dlb_sum_acc_2_1', 'dlb_sum_acc_2_2', \
+                            'depsb_sum_grav_2', \
+                            'depsb_sum_grav_no_mdot_2', \
+                            'depsb_sum_grav_acc_no_mdot_2',\
+                            'depsb_sum_grav_acc_2', \
+                            'depsb_sum_grav_a_2',\
+                            'depsb_sum_acc_2']
+        else:
+            columns = ['t', \
+                        'id_1', 'id_2', \
+                        'mass_1', 'mass_2', \
+                        'sink_1_pos_0', 'sink_1_pos_1', 'sink_1_pos_2', \
+                        'sink_2_pos_0', 'sink_2_pos_1', 'sink_2_pos_2', \
+                        'sink_1_vel_0', 'sink_1_vel_1', 'sink_1_vel_2', \
+                        'sink_2_vel_0', 'sink_2_vel_1', 'sink_2_vel_2', \
+                        'dm_1', 'dm_2', \
+                        'dp_1_0', 'dp_1_1', 'dp_1_2', \
+                        'dp_2_0', 'dp_2_1', 'dp_2_2', \
+                        'dspin_1_0', 'dspin_1_1', 'dspin_1_2',
+                        'dspin_2_0', 'dspin_2_1', 'dspin_2_2',
+                        'f_inst_grav_1_0', 'f_inst_grav_1_1', 'f_inst_grav_1_2', \
+                        'f_inst_grav_2_0', 'f_inst_grav_2_1', 'f_inst_grav_2_2', \
+                        'f_inst_grav_a_1_0', 'f_inst_grav_a_1_1', 'f_inst_grav_a_1_2', \
+                        'f_inst_grav_a_2_0', 'f_inst_grav_a_2_1', 'f_inst_grav_a_2_2', \
+                        'f_inst_grav_acc_1_0', 'f_inst_grav_acc_1_1', 'f_inst_grav_acc_1_2', \
+                        'f_inst_grav_acc_2_0', 'f_inst_grav_acc_2_1', 'f_inst_grav_acc_2_2', \
+                        'dlb_sum_grav_1_0', 'dlb_sum_grav_1_1', 'dlb_sum_grav_1_2', \
+                        'dlb_grav_sum_2_0', 'dlb_grav_sum_2_1', 'dlb_sum_grav_2_2', \
+                        'dlb_sum_grav_a_1_0', 'dlb_sum_grav_a_1_1', 'dlb_sum_grav_a_1_2', \
+                        'dlb_sum_grav_a_2_0', 'dlb_sum_grav_a_2_1', 'dlb_sum_grav_a_2_2', \
+                        'dlb_sum_acc_1_0', 'dlb_sum_acc_1_1', 'dlb_sum_acc_1_2', \
+                        'dlb_sum_acc_2_0', 'dlb_sum_acc_2_1', 'dlb_sum_acc_2_2', \
+                        'depsb_sum_grav_no_mdot_1', 'depsb_sum_grav_no_mdot_2', \
+                        'depsb_sum_grav_acc_no_mdot_1', 'depsb_sum_grav_acc_no_mdot_2', \
+                        'depsb_sum_grav_a_no_mdot_1', 'depsb_sum_grav_a_no_mdot_2', \
+                        'depsb_sum_acc_no_mdot_1', 'depsb_sum_acc_no_mdot_2']
+            columns_bh_1 = ['id_1', 'mass_1', 'sink_1_pos_0', 'sink_1_pos_1', 'sink_1_pos_2', \
+                            'sink_1_vel_0', 'sink_1_vel_1', 'sink_1_vel_2', \
+                            'dm_1', \
+                            'dp_1_0', 'dp_1_1', 'dp_1_2', \
+                            'dspin_1_0', 'dspin_1_1', 'dspin_1_2', \
+                            'f_inst_grav_1_0', 'f_inst_grav_1_1', 'f_inst_grav_1_2', \
+                            'f_inst_grav_a_1_0', 'f_inst_grav_a_1_1', 'f_inst_grav_a_1_2', \
+                            'f_inst_grav_acc_1_0', 'f_inst_grav_acc_1_1', 'f_inst_grav_acc_1_2', \
+                            'dlb_sum_grav_1_0', 'dlb_sum_grav_1_1', 'dlb_sum_grav_1_2', \
+                            'dlb_sum_grav_a_1_0', 'dlb_sum_grav_a_1_1', 'dlb_sum_grav_a_1_2', \
+                            'dlb_sum_acc_1_0', 'dlb_sum_acc_1_1', 'dlb_sum_acc_1_2', \
+                            'depsb_sum_grav_no_mdot_1', \
+                            'depsb_sum_grav_acc_no_mdot_1', \
+                            'depsb_sum_grav_a_no_mdot_1', \
+                            'depsb_sum_acc_no_mdot_1']
+            columns_bh_2 = ['id_2', 'mass_2', 'sink_2_pos_0', 'sink_2_pos_1', 'sink_2_pos_2', \
+                            'sink_2_vel_0', 'sink_2_vel_1', 'sink_2_vel_2', \
+                            'dm_2', \
+                            'dp_2_0', 'dp_2_1', 'dp_2_2', \
+                            'dp_2_0', 'dp_2_1', 'dp_2_2', \
+                            'f_inst_grav_2_0', 'f_inst_grav_2_1', 'f_inst_grav_2_2', \
+                            'f_inst_grav_a_2_0', 'f_inst_grav_a_2_1', 'f_inst_grav_a_2_2', \
+                            'f_inst_grav_acc_2_0', 'f_inst_grav_acc_2_1', 'f_inst_grav_acc_2_2', \
+                            'dlb_grav_sum_2_0', 'dlb_grav_sum_2_1', 'dlb_sum_grav_2_2', \
+                            'dlb_sum_grav_a_2_0', 'dlb_sum_grav_a_2_1', 'dlb_sum_grav_a_2_2', \
+                            'dlb_sum_acc_2_0', 'dlb_sum_acc_2_1', 'dlb_sum_acc_2_2', \
+                            'depsb_sum_grav_no_mdot_2', \
+                            'depsb_sum_grav_acc_no_mdot_2', \
+                            'depsb_sum_grav_a_no_mdot_2', \
+                            'depsb_sum_acc_no_mdot_2']
+
+        torque_array = pd.read_csv(fp + '//%s.txt' %fname, sep=" ", header=None)
+        torque_array.columns = columns
+
+        if raw:
+            if 'tmin' in kwargs:
+                tmin=kwargs['tmin']
+            else:
+                tmin=min(torque_array['t'])
+            if 'tmax' in kwargs:
+                tmax = kwargs['tmax']
+            else:
+                tmax=max(torque_array['t'])
+
+            ind_tmin = torque_array['t']>=tmin
+            ind_tmax = torque_array['t']<=tmax
+            ind_t = ind_tmin & ind_tmax
+
+            torque_array_return = {}
+            for key in columns:
+                torque_array_return[key] = torque_array[key][ind_t]
+            return(torque_array_return)
+
+        torque_array_ordered = {}
+        for torque_array_column in torque_array.columns:
+            torque_array_ordered[torque_array_column] = np.zeros(np.shape(torque_array[torque_array_column]))
+            torque_array_ordered['t'] = torque_array['t']
+
+        snap_0 = h5.File(fp +  '/snap_000.hdf5')
+
+        bh_ids = []
+        if max(snap_0['PartType5']['Masses']) == snap_0['PartType5']['Masses'][0]:
+            bh_1_id = snap_0['PartType5']['ParticleIDs'][0]
+            bh_1_mass = snap_0['PartType5']['Masses'][0]
+            bh_ids.append(bh_1_id)
+            bh_2_id = 0
+            bh_2_mass = 0
+            n_sinks = len(snap_0['PartType5']['ParticleIDs'])
+            if n_sinks == 2:
+                bh_2_id = snap_0['PartType5']['ParticleIDs'][1]
+                bh_2_mass = snap_0['PartType5']['Masses'][1]
+        else:
+            bh_1_id = snap_0['PartType5']['ParticleIDs'][1]
+            bh_1_mass = snap_0['PartType5']['Masses'][1]
+            bh_2_id = snap_0['PartType5']['ParticleIDs'][0]
+            bh_2_mass = snap_0['PartType5']['Masses'][0]
+
+        for n_sink,id_sink in zip([[1,2],[2,1]],[bh_1_id, bh_2_id]):
+            #first turn all sink ids into int, in case they were saved as floats/exp
+            torque_array['id_%d' %n_sink[0]] = [int(x) for x in torque_array['id_%d' %n_sink[0]]]
+            torque_array['id_%d' %n_sink[1]] = [int(x) for x in torque_array['id_%d' %n_sink[1]]]
+
+            ind_bh_1 = torque_array['id_%d' %n_sink[0]] == id_sink
+            ind_bh_2 = torque_array['id_%d' %n_sink[1]] == id_sink
+
+            for column_bh_1, column_bh_2 in zip(columns_bh_1, columns_bh_2):
+                torque_array_ordered[column_bh_1][ind_bh_1] = torque_array[column_bh_1][ind_bh_1]
+                torque_array_ordered[column_bh_1][ind_bh_2] = torque_array[column_bh_2][ind_bh_2]
+
+                torque_array_ordered[column_bh_2][ind_bh_1] = torque_array[column_bh_2][ind_bh_1]
+                torque_array_ordered[column_bh_2][ind_bh_2] = torque_array[column_bh_1][ind_bh_2]
+
+        """ Check if there are discontinuities: when restarting, the time difference can be 0 or -ve """
+        inds_to_remove = []
+        i_t = 0
+        while i_t < (len(torque_array_ordered['t'])-1):
+            t_i = torque_array_ordered['t'][i_t]
+            t_i_next = torque_array_ordered['t'][i_t+1]
+            if (t_i_next-t_i) <= 0:
+                index_last_time = i_t
+                """ find up until where time is less than or equal to the current index """
+                while torque_array_ordered['t'][i_t] <= torque_array_ordered['t'][index_last_time]:
+                    inds_to_remove.append(i_t)
+                    i_t += 1
+                    if i_t >= len(torque_array_ordered['t'])-1:
+                        break
+            i_t += 1
+
+        """ Now make boolean array for indexing """
+        bool_arr = np.ones(np.shape(torque_array_ordered['t']), dtype=bool)
+        bool_arr[inds_to_remove] = False
+        """ And remove the indeces where duplicates happen """
+        for key in torque_array_ordered.keys():
+            torque_array_ordered[key] = torque_array_ordered[key][bool_arr]
+
+        """ ACCRETION RATES """
+        torque_array_ordered['dm'] = torque_array_ordered['dm_1'] + torque_array_ordered['dm_2']
+        torque_array_ordered['mdot_1'] = np.zeros((len(torque_array_ordered['t'])))
+        torque_array_ordered['mdot_1'][1:] = torque_array_ordered['dm_1'][1:]/np.diff(torque_array_ordered['t'])
+        torque_array_ordered['mdot_2'] = np.zeros((len(torque_array_ordered['t'])))
+        torque_array_ordered['mdot_2'][1:] = torque_array_ordered['dm_2'][1:]/np.diff(torque_array_ordered['t'])
+        torque_array_ordered['mdot'] = torque_array_ordered['mdot_1'] + torque_array_ordered['mdot_2']
+
+        """ VECTORS CONNECTING SINKS: RELATIVE POSITION AND VELOCITY """
+        r_1 = np.array([torque_array_ordered['sink_1_pos_0'], torque_array_ordered['sink_1_pos_1'], torque_array_ordered['sink_1_pos_2']])
+        r_2 = np.array([torque_array_ordered['sink_2_pos_0'], torque_array_ordered['sink_2_pos_1'], torque_array_ordered['sink_2_pos_2']])
+        torque_array_ordered['r_b'] = r_1 - r_2
+        torque_array_ordered['r_b_mag'] = np.linalg.norm(torque_array_ordered['r_b'], axis=0)
+        v_1 = np.array([torque_array_ordered['sink_1_vel_0'], torque_array_ordered['sink_1_vel_1'], torque_array_ordered['sink_1_vel_2']])
+        v_2 = np.array([torque_array_ordered['sink_2_vel_0'], torque_array_ordered['sink_2_vel_1'], torque_array_ordered['sink_2_vel_2']])
+        torque_array_ordered['v_b'] = v_1 - v_2
+
+        """ CORRECT FOR MISSING QUANTITIES IN e=0.200, e=0.400 SIMULATIONS """
+        if 'depsb_sum_grav_a_no_mdot_1' not in columns:
+            torque_array_ordered['depsb_sum_grav_a_no_mdot_1'] = torque_array_ordered['depsb_sum_grav_a_1'] + torque_array_ordered['dm_1']/torque_array_ordered['r_b_mag']
+        if 'depsb_sum_grav_a_no_mdot_2' not in columns:
+            torque_array_ordered['depsb_sum_grav_a_no_mdot_2'] = torque_array_ordered['depsb_sum_grav_a_2'] + torque_array_ordered['dm_2']/torque_array_ordered['r_b_mag']
+        """ CORRECT FOR MISSING QUANTITIES IN e=0.200, e=0.400 SIMULATIONS """
+
+        if 'tmin' in kwargs:
+            tmin=kwargs['tmin']
+        else:
+            tmin=min(torque_array_ordered['t'])
+        if 'tmax' in kwargs:
+            tmax = kwargs['tmax']
+        else:
+            tmax=max(torque_array_ordered['t'])
+
+        ind_tmin = torque_array_ordered['t']>=tmin
+        ind_tmax = torque_array_ordered['t']<=tmax
+        ind_t = ind_tmin & ind_tmax
+
+        t_orb = misc.T_orbit(a = 1)
+        torque_array_ordered['t_orb'] = torque_array_ordered['t']/t_orb
+
+        for key in torque_array_ordered.keys():
+            if key == 'r_b' or key == 'v_b':
+                for j in [0,1,2]:
+                    torque_array_ordered[key][j] = torque_array_ordered[key][j][ind_t]
+            else:
+                torque_array_ordered[key] = torque_array_ordered[key][ind_t]
+
+        ind_nan = [True]*len(torque_array_ordered['t'])
+        for key in torque_array_ordered.keys():
+            if key == 'r_b' or key == 'v_b':
+                for j in [0,1,2]:
+                    ind_nan2 = ~np.isnan(torque_array_ordered[key][j])
+                    ind_nan = ind_nan & ind_nan2
+            else:
+                ind_nan2 = ~np.isnan(torque_array_ordered[key])
+                ind_nan = ind_nan & ind_nan2
+
+        for key in torque_array_ordered.keys():
+            if key == 'r_b' or key == 'v_b':
+                for j in [0,1,2]:
+                    torque_array_ordered[key][j] = torque_array_ordered[key][j][ind_nan]
+            else:
+                torque_array_ordered[key] = torque_array_ordered[key][ind_nan]
+
+        return(torque_array_ordered)
+
+
+                    
+
 
                 
 
-
             
-
-        
