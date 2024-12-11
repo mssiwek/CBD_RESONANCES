@@ -1,8 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.colors as colors
+import matplotlib as mpl
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-import misc
 
 
 figwidth = 7
@@ -11,6 +11,43 @@ fs = 20
 ticksize = 8
 tickwidth = 1.5
 linewidth = 2
+
+
+def adjust_axes(fig, show_grid=False, **kwargs):
+	if 'fs' in kwargs:
+		fs = kwargs['fs']
+	if 'figwidth' in kwargs:
+		figwidth = kwargs['figwidth']
+	if 'figheight' in kwargs:
+		figheight = kwargs['figheight']
+	if 'ticksize' in kwargs:
+		ticksize = kwargs['ticksize']
+	if 'tickwidth' in kwargs:
+		tickwidth = kwargs['tickwidth']
+	if 'linewidth' in kwargs:
+		linewidth = kwargs['linewidth']
+
+	if 'axes' in kwargs:
+		axes = kwargs['axes']
+	else:
+		axes = fig.axes
+
+	""" FORMAT ALL AXES WITH SPECIFIC AXIS TICKS, ADDING GRIDS, AND APPLYTING TIGHT LAYOUT """
+	for ax in axes:
+		ax.tick_params(axis='both', which='major', direction='inout', size=ticksize, width=tickwidth)
+		ax.tick_params(axis='both', which='minor', direction='inout', size=0.7*ticksize, width=0.7*tickwidth)
+		if show_grid:
+			ax.grid(which='both', color='k', linestyle='-', linewidth=1)
+		plt.setp(ax.get_xticklabels(which='major'), fontsize=fs)
+		plt.setp(ax.get_yticklabels(which='major'), fontsize=fs)
+		#plt.tight_layout()
+		mpl.rcParams['axes.labelsize'] = fs
+		mpl.rcParams['axes.titlesize'] = fs
+
+	return(fig)
+	""" FORMAT ALL AXES WITH SPECIFIC AXIS TICKS, ADDING GRIDS, AND APPLYING TIGHT LAYOUT """
+
+
 
 def plot_sinks(ax, sn=None, size=0.1, BoxSize=300):
     if sn is not None:
@@ -82,7 +119,7 @@ def plot_mesh(X, Y, Z, cbar_symlog=True, **kwargs):
     if 'ax' in kwargs:
         return(ax)
     else:
-        misc.adjust_axes(fig, show_grid=False, ticksize=ticksize, fs=fs, tickwidth=tickwidth)
+        adjust_axes(fig, show_grid=False, ticksize=ticksize, fs=fs, tickwidth=tickwidth)
         plt.tight_layout()
         if 'figpath' in kwargs and 'fname' in kwargs:
             plt.savefig(kwargs['figpath'] + kwargs['fname'] + '.png')
