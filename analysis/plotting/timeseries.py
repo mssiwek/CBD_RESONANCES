@@ -64,12 +64,6 @@ def plot_ts(fp, label, color, \
         val = binevol.ebdot()
     if param == 'abdot':
         val = binevol.abdot()
-    
-    if normalized:
-        mbdot_norm = binevol.mbdot_norm()
-        val = val/np.mean(mbdot_norm)
-        # this is the rate of change of val per unit time,
-        # normalized by the mean accretion rate in this time interval
 
     t = binevol.SimInit.t
     if 'tmin' in kwargs and 'tmax' in kwargs:
@@ -78,8 +72,15 @@ def plot_ts(fp, label, color, \
         inds = inds_lower & inds_upper
         t = t[inds]
         val = val[inds]
+        mbdot_norm = binevol.mbdot_norm()[inds]
     else:
         t = binevol.SimInit.t
+        mbdot_norm = binevol.mbdot_norm()
+    
+    if normalized:
+        val = val/np.mean(mbdot_norm)
+        # this is the rate of change of val per unit time,
+        # normalized by the mean accretion rate in this time interval
     """ ----------------- """
     """ LOAD ALL THE DATA """
     """ ----------------- """
