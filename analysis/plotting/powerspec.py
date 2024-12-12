@@ -20,7 +20,7 @@ Pb = (2.*np.pi)
 """ HELPER FUNCTION TO SAVE FIGURES FOR TIMESERIES DATA """
 """ --- THIS IS TO HELP AVOID REPEATED CODE SNIPPETS -- """
 """ --------------------------------------------------- """
-def sfig(fig, figpath, fname):
+def sfig(fig, figpath, fname, save=True):
     fig.tight_layout(rect=[0, 0.03, 1, 0.95])
     put.adjust_axes(fig, show_grid=False, ticksize=ticksize, fs=fs, tickwidth=tickwidth)
     plt.tight_layout()
@@ -40,6 +40,7 @@ def sfig(fig, figpath, fname):
 """ ---------------------------------------------------- """
 def plot_ps(fp, label, color, \
             param, acc, f_acc, fg_cav, \
+            save=True,\
             **kwargs):
     
     """ LOAD AXIS """
@@ -49,8 +50,6 @@ def plot_ps(fp, label, color, \
         fig,ax = plt.subplots(nrows=1, ncols=1, \
                               sharex=True, sharey=True,\
                               figsize = (figwidth, figheight))
-        fname = kwargs['fname']
-        figpath = kwargs['figpath']
     
 
 
@@ -136,8 +135,14 @@ def plot_ps(fp, label, color, \
     if 'ax' in kwargs:
         return(ax)
     else:
-        sfig(fig,figpath,fname, **kwargs)
-        return()
+        if save:
+            fname = kwargs['fname']
+            figpath = kwargs['figpath']
+            sfig(fig,figpath,fname, **kwargs)
+            return()
+        else:
+            fig = put.adjust_axes(fig, show_grid=False, ticksize=ticksize, fs=fs, tickwidth=tickwidth)
+            return(fig,ax,powspec,binevol)
 """ ---------------------------------------------------- """
 """ HELPER FUNCTION TO PLOT TIMESERIES DATA, AND SAVE IT """
 """ -- IF NO AXIS IS SUPPLIED OR NEEDS TO BE RETURNED -- """
@@ -154,7 +159,8 @@ def plot_ps(fp, label, color, \
 def plot(all_fps, labels, param, \
         accs, f_accs, fg_cavs, \
         all_in_one_ax = True, \
-        figpath = '../figures/', fname='ebdot', **kwargs):
+        figpath = '../figures/', \
+        fname='ebdot', save=True, **kwargs):
     """Plots the timeseries of param.
 
     Args:
@@ -237,6 +243,7 @@ def plot(all_fps, labels, param, \
                         transform=ax.transAxes, fontsize=fs)                     
             ax = plot_ps(fp, label, color, \
                     param, acc, f_acc, fg_cav, \
+                    save=save,\
                     ax=ax, **kwargs)
     # """ --------------------------------------------------------------------------------------------- """
     # """ PLOT MULTIPLE RUNS (DIFFERENT EB, QB, PHI, ... ) IN ONE AXIS (WITH ALL OTHER PARAMS THE SAME) """
@@ -258,6 +265,7 @@ def plot(all_fps, labels, param, \
                         transform=ax.transAxes, fontsize=fs)
                 ax = plot_ps(fp, label, color, \
                         param, acc, f_acc, fg_cav, \
+                        save=save,\
                         ax = ax, **kwargs)
     # """ ---------------------------------------------------------------------- """
     # """ EACH AXIS PLOTS SEVERAL FPS IN ONE, BUT WITH MULTIPLE AXIS LOOPING OVER
@@ -282,11 +290,14 @@ def plot(all_fps, labels, param, \
                         label = labels[k]
                         ax = plot_ps(fp, label, colors[i][j][l], \
                                     param, acc, f_acc, fg_cav, \
+                                    save=save,\
                                     ax = ax, **kwargs)
                         k+=1
-
-    sfig(fig, figpath, fname)
-    return()
+    if save:
+        sfig(fig, figpath, fname)
+        return()
+    else:
+        return(fig,ax)
 # """ --------------------------------------------------------- """
 # """ MAIN PLOTTING ROUTINE FUNCTION THAT IDENTIFIES THE PARAMS """
 # """ ------- THAT ARE TO BE PLOTTED AGAINST EACH OTHER ------- """
