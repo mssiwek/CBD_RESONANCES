@@ -42,17 +42,29 @@ class PowSpec:
         return()
 
     def ls_peaks(self, npeaks=5):
-        peaks, _ = find_peaks(self.y_ls)
+        from peakutils import indexes
+        dist = 1.e3
+        thres = 1.e-5
+        peaks = indexes(self.y_ls, \
+                        min_dist = dist, \
+                        thres = thres)
         #peaks are the indices of the peaks detected in self.y_ls
         #now we want to get the largest peaks (up to rank npeaks):
-        y_peaks = self.y_ls[peaks]
-        x_peaks = self.x_ls[peaks]
-        inds_desc = y_peaks.argsort()[::-1] #[::-1] reverses the order
-        np_inds = inds_desc[0:npeaks]
 
-        #get x and y vals of npeaks indices
-        self.x_pks = x_peaks[np_inds]
-        self.y_pks = y_peaks[np_inds]
+        if len(peaks) > npeaks:
+            x_peaks = self.x_ls[peaks]
+            y_peaks = self.y_ls[peaks]
+            
+            inds_desc = y_peaks.argsort()[::-1] #[::-1] reverses the order
+            np_inds = inds_desc[0:npeaks]
+
+            #get x and y vals of npeaks indices
+            self.x_pks = x_peaks[np_inds]
+            self.y_pks = y_peaks[np_inds]
+        else:
+            self.x_pks = self.y_ls[peaks]
+            self.y_pks = self.x_ls[peaks]
+        
         return()
 
 
